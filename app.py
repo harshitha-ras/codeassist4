@@ -9,8 +9,25 @@ from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
 import openai
 
-# Set your API key
-os.environ["OPENAI_API_KEY"] = st.secrets["openai"]["api_key"]
+# Try multiple methods to set the OpenAI API key
+try:
+    # First, try to get the key from Streamlit secrets
+    openai.api_key = st.secrets["openai"]["api_key"]
+except KeyError:
+    # If not in Streamlit secrets, try environment variable
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Add an input for the API key in the UI if not already set
+if not openai.api_key:
+    st.sidebar.warning("OpenAI API Key is required!")
+    api_key_input = st.sidebar.text_input(
+        "Enter your OpenAI API Key", 
+        type="password"
+    )
+    
+    if api_key_input:
+        openai.api_key = api_key_input
+        st.sidebar.success("API Key set successfully!")
 
 # In your main Streamlit app
 hf_token = st.secrets.get('huggingface', {}).get('token')
