@@ -12,6 +12,10 @@ from langchain_openai import OpenAI
 # Set your API key
 os.environ["OPENAI_API_KEY"] = st.secrets["openai"]["api_key"]
 
+# In your main Streamlit app
+hf_token = st.secrets.get('huggingface', {}).get('token')
+
+
 # App title and description
 st.title("RAG Application with Stack Database")
 st.write("This app performs retrieval-augmented generation using the Stack database.")
@@ -177,7 +181,7 @@ with tab1:
     
     if st.button("Load Stack Dataset"):
         with st.spinner("Loading and processing dataset..."):
-            documents = extract_text_from_stack(num_samples)
+            documents = extract_text_from_stack(num_samples, hf_token)
             st.session_state.documents = documents
             st.success(f"Loaded {len(documents)} documents from Stack dataset")
     
