@@ -233,7 +233,7 @@ with tab1:
     
     if st.button("Load Stack Dataset"):
         with st.spinner("Loading and processing dataset..."):
-            documents = extract_text_from_stack(num_samples, hf_token)
+            documents = extract_text_from_stack(num_samples)
             st.session_state.documents = documents
             st.success(f"Loaded {len(documents)} documents from Stack dataset")
     
