@@ -47,25 +47,57 @@ except:
 
 # Function to extract text from Stack dataset
 def extract_text_from_stack(num_samples=100):
-    """Load and extract text from Stack dataset using Hugging Face datasets library"""
-    dataset = load_dataset("bigcode/the-stack", streaming=True, split="train")
+    """
+    Extract text from Stack dataset
     
-    samples = []
-    for i, item in enumerate(dataset):
-        if i >= num_samples:
-            break
-        content = item.get('content', '')
-        if content and isinstance(content, str):
-            samples.append({
-                "id": str(i),
-                "text": content,
-                "metadata": {
-                    "lang": item.get('lang', ''),
-                    "repo": item.get('repo_name', '')
-                }
-            })
+    Args:
+        num_samples (int): Number of samples to extract
     
-    return samples
+    Returns:
+        list: List of extracted text samples
+    """
+    try:
+        # Try to get token from secrets
+        hf_token = st.secrets.get('huggingface', {}).get('token')
+        
+        # Attempt to login if token is provided
+        if hf_token:
+            try:
+                login(token=hf_token)
+            except Exception as login_error:
+                st.warning(f"Hugging Face login failed: {login_error}")
+        
+        # Load dataset with optional token
+        dataset = load_dataset(
+            "bigcode/the-stack", 
+            streaming=True, 
+            split="train",
+            token=hf_token
+        )
+        
+        samples = []
+        for i, item in enumerate(dataset):
+            if i >= num_samples:
+                break
+            
+            # Basic filtering and cleaning
+            content = item.get('content', '')
+            if content and isinstance(content, str) and len(content.strip()) > 0:
+                samples.append({
+                    "id": str(i),
+                    "text": content.strip(),
+                    "metadata": {
+                        "lang": item.get('lang', 'unknown'),
+                        "repo": item.get('repo_name', 'unknown')
+                    }
+                })
+        
+        return samples
+        
+    except Exception as e:
+        st.error(f"Error loading dataset: {e}")
+        # Provide a fallback or empty list
+        return []
 
 # Manual text chunking function
 def chunk_text(text, chunk_size=1000, overlap=200):
