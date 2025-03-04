@@ -170,7 +170,10 @@ def semantic_search(query, n_results=3):
 
 # RAG function - retrieve context and generate response
 def rag_generate(query, n_chunks=3, temperature=0.7):
-    """Perform RAG by retrieving relevant chunks and generating response"""
+    """
+    Perform RAG by retrieving relevant chunks and generating response
+    using OpenAI API directly
+    """
     # Get relevant chunks
     search_results = semantic_search(query, n_results=n_chunks)
     
@@ -193,14 +196,31 @@ QUERY:
 ANSWER:
 """
     
-    # Use OpenAI for generation
-    llm = OpenAI(temperature=temperature)
-    response = llm.invoke(prompt)
+    try:
+        # Use OpenAI API directly
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers questions based on given context."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=temperature,
+            max_tokens=300
+        )
+        
+        generated_response = response.choices[0].message.content
+        
+        return {
+            "response": generated_response,
+            "retrieved_chunks": retrieved_chunks
+        }
     
-    return {
-        "response": response,
-        "retrieved_chunks": retrieved_chunks
-    }
+    except Exception as e:
+        st.error(f"Error generating response: {str(e)}")
+        return {
+            "response": "Sorry, I couldn't generate a response.",
+            "retrieved_chunks": retrieved_chunks
+        }
 
 # UI Components
 tab1, tab2, tab3 = st.tabs(["Load Data", "Search", "Settings"])
