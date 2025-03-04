@@ -65,7 +65,7 @@ except:
 # Function to extract text from Stack dataset
 def extract_text_from_stack(num_samples=100):
     """
-    Extract text from Stack dataset
+    Extract text from Stack dataset with robust error handling
     
     Args:
         num_samples (int): Number of samples to extract
@@ -74,22 +74,12 @@ def extract_text_from_stack(num_samples=100):
         list: List of extracted text samples
     """
     try:
-        # Try to get token from secrets
-        hf_token = st.secrets.get('huggingface', {}).get('token')
-        
-        # Attempt to login if token is provided
-        if hf_token:
-            try:
-                login(token=hf_token)
-            except Exception as login_error:
-                st.warning(f"Hugging Face login failed: {login_error}")
-        
-        # Load dataset with optional token
+        # Use more explicit dataset loading
         dataset = load_dataset(
             "bigcode/the-stack", 
-            streaming=True, 
-            split="train",
-            token=hf_token
+            data_dir="data/python",  # Specify a specific subset if possible
+            streaming=False,  # Try non-streaming mode
+            split="train[:5000]"  # Limit initial load
         )
         
         samples = []
@@ -97,24 +87,60 @@ def extract_text_from_stack(num_samples=100):
             if i >= num_samples:
                 break
             
-            # Basic filtering and cleaning
+            # More robust content extraction
             content = item.get('content', '')
             if content and isinstance(content, str) and len(content.strip()) > 0:
                 samples.append({
                     "id": str(i),
-                    "text": content.strip(),
+                    "text": content.strip()[:5000],  # Limit text length
                     "metadata": {
-                        "lang": item.get('lang', 'unknown'),
+                        "lang": item.get('language', 'unknown'),
                         "repo": item.get('repo_name', 'unknown')
                     }
                 })
         
         return samples
-        
+    
     except Exception as e:
-        st.error(f"Error loading dataset: {e}")
-        # Provide a fallback or empty list
+        # Detailed error logging
+        st.error(f"Detailed Error Loading Dataset: {str(e)}")
+        st.error(traceback.format_exc())
+        
+        # Provide more context about potential issues
+        st.info("""
+        Possible reasons for dataset loading failure:
+        1. Network connectivity issues
+        2. Hugging Face dataset temporarily unavailable
+        3. Authentication problems
+        4. Changes in dataset structure
+        """)
+        
         return []
+
+def list_stack_dataset_info():
+    """
+    Retrieve and display information about the dataset
+    """
+    try:
+        api = HfApi()
+        dataset_info = api.dataset_info("bigcode/the-stack")
+        
+        st.sidebar.header("Dataset Information")
+        st.sidebar.write(f"**Name:** {dataset_info.id}")
+        st.sidebar.write(f"**Downloads:** {dataset_info.downloads}")
+        st.sidebar.write(f"**Likes:** {dataset_info.likes}")
+        
+        # Display available configurations
+        st.sidebar.subheader("Available Configurations")
+        try:
+            configs = api.dataset_configurations("bigcode/the-stack")
+            for config in configs:
+                st.sidebar.text(config.config_name)
+        except Exception as config_error:
+            st.sidebar.error(f"Could not fetch configurations: {config_error}")
+    
+    except Exception as e:
+        st.sidebar.error(f"Error fetching dataset info: {e}")
 
 # Manual text chunking function
 def chunk_text(text, chunk_size=1000, overlap=200):
@@ -247,7 +273,7 @@ with tab1:
     st.write("Load and chunk data from the Stack dataset")
     
     num_samples = st.slider("Number of samples to load", 10, 500, 50)
-    
+    list_stack_dataset_info()
     if st.button("Load Stack Dataset"):
         with st.spinner("Loading and processing dataset..."):
             documents = extract_text_from_stack(num_samples)
