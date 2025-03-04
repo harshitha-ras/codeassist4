@@ -7,7 +7,7 @@ import chromadb
 import torch
 from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
-from langchain_openai import OpenAI
+import openai
 
 # Set your API key
 os.environ["OPENAI_API_KEY"] = st.secrets["openai"]["api_key"]
