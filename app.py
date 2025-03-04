@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import sys
 import traceback
+import requests
 
 # SQLite Patch
 __import__('pysqlite3')
@@ -10,7 +11,6 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 import torch
 import openai
-from huggingface_hub import HfApi
 from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
 
@@ -60,7 +60,7 @@ except:
 # Robust dataset loading function
 def extract_text_from_stack(num_samples=100):
     """
-    Extract text from Stack dataset with robust error handling
+    Extract text from Stack dataset with comprehensive error handling
     
     Args:
         num_samples (int): Number of samples to extract
@@ -69,12 +69,22 @@ def extract_text_from_stack(num_samples=100):
         list: List of extracted text samples
     """
     try:
-        # Use more explicit dataset loading
+        # First, check network connectivity and dataset availability
+        try:
+            response = requests.head("https://huggingface.co/datasets/bigcode/the-stack")
+            if response.status_code != 200:
+                st.error(f"Hugging Face dataset endpoint returned status code {response.status_code}")
+                return []
+        except requests.RequestException as network_error:
+            st.error(f"Network connectivity issue: {network_error}")
+            return []
+
+        # Try loading dataset with more explicit parameters
         dataset = load_dataset(
             "bigcode/the-stack", 
-            data_dir="data/python",  # Specify a specific subset if possible
-            streaming=False,  # Try non-streaming mode
-            split=f"train[:{num_samples}]"  # Limit initial load
+            split=f"train[:{num_samples}]",
+            streaming=False,
+            trust_remote_code=True  # Allow executing remote dataset loading code
         )
         
         samples = []
@@ -86,53 +96,33 @@ def extract_text_from_stack(num_samples=100):
                     "id": str(i),
                     "text": content.strip()[:5000],  # Limit text length
                     "metadata": {
-                        "lang": item.get('language', 'unknown'),
-                        "repo": item.get('repo_name', 'unknown')
+                        "language": item.get('language', 'unknown'),
+                        "repo_name": item.get('repo_name', 'unknown')
                     }
                 })
         
         return samples
     
     except Exception as e:
-        # Detailed error logging
+        # Comprehensive error logging
         st.error(f"Detailed Error Loading Dataset: {str(e)}")
         st.error(traceback.format_exc())
         
-        # Provide more context about potential issues
+        # Provide more context and potential solutions
         st.info("""
-        Possible reasons for dataset loading failure:
-        1. Network connectivity issues
-        2. Hugging Face dataset temporarily unavailable
-        3. Authentication problems
-        4. Changes in dataset structure
+        Comprehensive Troubleshooting for Dataset Loading:
+        1. Verify network connectivity
+        2. Check Hugging Face dataset availability
+        3. Ensure you have the latest versions of:
+           - huggingface_hub
+           - datasets
+           - transformers
+        4. Potential workarounds:
+           - Try a different dataset subset
+           - Use alternative data loading method
         """)
         
         return []
-
-def list_stack_dataset_info():
-    """
-    Retrieve and display information about the dataset
-    """
-    try:
-        api = HfApi()
-        dataset_info = api.dataset_info("bigcode/the-stack")
-        
-        st.sidebar.header("Dataset Information")
-        st.sidebar.write(f"**Name:** {dataset_info.id}")
-        st.sidebar.write(f"**Downloads:** {dataset_info.downloads}")
-        st.sidebar.write(f"**Likes:** {dataset_info.likes}")
-        
-        # Display available configurations
-        st.sidebar.subheader("Available Configurations")
-        try:
-            configs = api.dataset_configurations("bigcode/the-stack")
-            for config in configs:
-                st.sidebar.text(config.config_name)
-        except Exception as config_error:
-            st.sidebar.error(f"Could not fetch configurations: {config_error}")
-    
-    except Exception as e:
-        st.sidebar.error(f"Error fetching dataset info: {e}")
 
 # Manual text chunking function
 def chunk_text(text, chunk_size=1000, overlap=200):
@@ -260,9 +250,6 @@ ANSWER:
 # Streamlit UI
 def main():
     st.title("RAG Application with Stack Dataset")
-    
-    # Sidebar for dataset information
-    list_stack_dataset_info()
     
     # Main tabs
     tab1, tab2, tab3 = st.tabs(["Load Data", "Search", "Settings"])
