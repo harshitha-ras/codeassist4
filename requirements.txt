@@ -1,8 +1,8 @@
 streamlit==1.26.0
-datasets==2.14.5
-sentence-transformers==2.2.2
+datasets
+sentence-transformers
 chromadb==0.4.18
 torch==2.0.1
 openai==1.3.5
 pysqlite3-binary==0.5.2
-huggingface_hub==0.19.4
+huggingface_hub
