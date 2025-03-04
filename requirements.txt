@@ -1,0 +1,7 @@
+streamlit
+datasets
+sentence-transformers
+chromadb
+torch
+langchain-openai
+openai
