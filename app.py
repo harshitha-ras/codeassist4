@@ -32,6 +32,7 @@ if not openai.api_key:
         openai.api_key = api_key_input
         st.sidebar.success("API Key set successfully!")
 
+# GitHub Authentication
 hf_token = st.text_input("Enter your Hugging Face API token:", type="password")
 
 # Store the token in the session state
@@ -41,7 +42,6 @@ if hf_token:
 
 # Use the token in your app
 if 'hf_token' in st.session_state:
-    # Your code to use the token goes here
     st.write("Token is available for use in the app")
 else:
     st.warning("Please enter your Hugging Face token")
@@ -62,22 +62,23 @@ chroma_client = get_chroma_client()
 
 # Create or get collection
 try:
-    collection = chroma_client.get_collection("stack_collection")
+    collection = chroma_client.get_collection("github_collection")
     st.success("Connected to existing ChromaDB collection.")
 except:
     collection = chroma_client.create_collection(
-        "stack_collection",
-        metadata={"description": "Stack dataset chunks for RAG"}
+        "github_collection",
+        metadata={"description": "GitHub repository code chunks for RAG"}
     )
     st.info("Created new ChromaDB collection.")
 
 # Robust dataset loading function
-def extract_text_from_stack(num_samples=100):
+def extract_text_from_github(num_samples=100, programming_languages=None):
     """
-    Extract text from Stack dataset with comprehensive error handling
+    Extract text from GitHub dataset with comprehensive error handling
     
     Args:
         num_samples (int): Number of samples to extract
+        programming_languages (list): Optional list of programming languages to filter
     
     Returns:
         list: List of extracted text samples
@@ -85,7 +86,7 @@ def extract_text_from_stack(num_samples=100):
     try:
         # First, check network connectivity and dataset availability
         try:
-            response = requests.head("https://huggingface.co/datasets/bigcode/the-stack")
+            response = requests.head("https://huggingface.co/datasets/codeparrot/github-code")
             if response.status_code != 200:
                 st.error(f"Hugging Face dataset endpoint returned status code {response.status_code}")
                 return []
@@ -93,25 +94,33 @@ def extract_text_from_stack(num_samples=100):
             st.error(f"Network connectivity issue: {network_error}")
             return []
 
+        # Prepare dataset loading parameters
+        load_params = {
+            "name": "codeparrot/github-code", 
+            "split": f"train[:{num_samples}]",
+            "streaming": False,
+            "trust_remote_code": True
+        }
+
+        # Optional language filtering
+        if programming_languages:
+            load_params["config"] = f"language:{','.join(programming_languages)}"
+
         # Try loading dataset with more explicit parameters
-        dataset = load_dataset(
-            "bigcode/the-stack", 
-            split=f"train[:{num_samples}]",
-            streaming=False,
-            trust_remote_code=True  # Allow executing remote dataset loading code
-        )
+        dataset = load_dataset(**load_params)
         
         samples = []
         for i, item in enumerate(dataset):
             # More robust content extraction
-            content = item.get('content', '')
+            content = item.get('code', '')
             if content and isinstance(content, str) and len(content.strip()) > 0:
                 samples.append({
                     "id": str(i),
                     "text": content.strip()[:5000],  # Limit text length
                     "metadata": {
                         "language": item.get('language', 'unknown'),
-                        "repo_name": item.get('repo_name', 'unknown')
+                        "repo_name": item.get('repo_name', 'unknown'),
+                        "path": item.get('path', 'unknown')
                     }
                 })
         
@@ -138,7 +147,7 @@ def extract_text_from_stack(num_samples=100):
         
         return []
 
-# Manual text chunking function
+# Manual text chunking function (remains the same as previous implementation)
 def chunk_text(text, chunk_size=1000, overlap=200):
     """Chunk text into smaller pieces with overlap"""
     chunks = []
@@ -161,12 +170,12 @@ def chunk_text(text, chunk_size=1000, overlap=200):
     
     return chunks
 
-# Function to generate embeddings
+# Function to generate embeddings (remains the same)
 def generate_embeddings(texts):
     """Generate embeddings for a list of texts"""
     return embedding_model.encode(texts).tolist()
 
-# Store documents in ChromaDB
+# Store documents in ChromaDB (remains largely the same)
 def store_in_chromadb(documents):
     """Store chunked documents in ChromaDB"""
     for doc in documents:
@@ -195,7 +204,7 @@ def store_in_chromadb(documents):
                 documents=[chunk]
             )
 
-# Semantic search function
+# Semantic search function (remains the same)
 def semantic_search(query, n_results=3):
     """Perform semantic search on the database"""
     query_embedding = generate_embeddings([query])[0]
@@ -207,7 +216,7 @@ def semantic_search(query, n_results=3):
     
     return results
 
-# RAG generation function
+# RAG generation function (remains largely the same)
 def rag_generate(query, n_chunks=3, temperature=0.7):
     """
     Perform RAG by retrieving relevant chunks and generating response
@@ -263,22 +272,31 @@ ANSWER:
 
 # Streamlit UI
 def main():
-    st.title("RAG Application with Stack Dataset")
+    st.title("RAG Application with GitHub Code Dataset")
     
     # Main tabs
     tab1, tab2, tab3 = st.tabs(["Load Data", "Search", "Settings"])
 
     with tab1:
         st.header("Load Data")
-        st.write("Load and chunk data from the Stack dataset")
+        st.write("Load and chunk data from GitHub repositories")
+        
+        # Language selection multiselect
+        languages = st.multiselect(
+            "Select Programming Languages", 
+            ['Python', 'JavaScript', 'Java', 'C++', 'TypeScript', 'Ruby', 'Go', 'Rust']
+        )
         
         num_samples = st.slider("Number of samples to load", 10, 500, 50)
         
-        if st.button("Load Stack Dataset"):
+        if st.button("Load GitHub Dataset"):
             with st.spinner("Loading and processing dataset..."):
-                documents = extract_text_from_stack(num_samples)
+                documents = extract_text_from_github(
+                    num_samples, 
+                    programming_languages=languages if languages else None
+                )
                 st.session_state.documents = documents
-                st.success(f"Loaded {len(documents)} documents from Stack dataset")
+                st.success(f"Loaded {len(documents)} documents from GitHub dataset")
         
         if st.button("Process and Store in ChromaDB"):
             if hasattr(st.session_state, 'documents'):
@@ -295,6 +313,7 @@ def main():
         except:
             st.warning("ChromaDB collection not yet initialized")
 
+    # Search and Settings tabs remain the same as in the previous implementation
     with tab2:
         st.header("Search and Generate")
         
@@ -337,10 +356,10 @@ def main():
         st.subheader("Reset Database")
         if st.button("Clear ChromaDB Collection", type="primary"):
             try:
-                chroma_client.delete_collection("stack_collection")
+                chroma_client.delete_collection("github_collection")
                 collection = chroma_client.create_collection(
-                    "stack_collection",
-                    metadata={"description": "Stack dataset chunks for RAG"}
+                    "github_collection",
+                    metadata={"description": "GitHub repository code chunks for RAG"}
                 )
                 st.success("ChromaDB collection cleared and recreated")
             except Exception as e:
@@ -349,13 +368,14 @@ def main():
 # Show app instructions in sidebar
 st.sidebar.title("Instructions")
 st.sidebar.markdown("""
-1. **Load Data**: First load data from the Stack dataset
-2. **Process and Store**: Click to process and store in ChromaDB
-3. **Search**: Enter a query and generate responses using RAG
+1. **Select Languages**: Choose programming languages (optional)
+2. **Load Data**: Load data from GitHub dataset
+3. **Process and Store**: Click to process and store in ChromaDB
+4. **Search**: Enter a query and generate responses using RAG
 
 This app:
-- Extracts text using the datasets library
-- Manually chunks text without using a chunking library
+- Extracts code using the datasets library
+- Chunks code without using a chunking library
 - Stores chunks in ChromaDB
 - Performs semantic search for retrieval 
 - Uses retrieved context for LLM generation
