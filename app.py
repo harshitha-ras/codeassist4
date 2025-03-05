@@ -56,8 +56,62 @@ embedding_model = load_embedding_model()
 # Initialize ChromaDB
 @st.cache_resource
 def get_chroma_client():
-    return chromadb.Client()
+    # Use persistent storage to prevent collection conflicts
+    return chromadb.PersistentClient(
+        path=".chromadb",  # Specify a persistent storage path
+        settings=Settings(
+            anonymized_telemetry=False,  # Disable telemetry if needed
+            allow_reset=True  # Allow resetting the database
+        )
+    )
+def get_or_create_collection(client, collection_name):
+    """
+    Safely get or create a ChromaDB collection
+    
+    Args:
+        client: ChromaDB client
+        collection_name: Name of the collection
+    
+    Returns:
+        ChromaDB collection
+    """
+    try:
+        # Try to delete existing collection first
+        try:
+            client.delete_collection(name=collection_name)
+        except:
+            pass
+        
+        # Create a new collection
+        collection = client.create_collection(
+            name=collection_name,
+            metadata={"description": "GitHub repository code chunks for RAG"}
+        )
+        st.success(f"Created new ChromaDB collection: {collection_name}")
+        return collection
+    
+    except Exception as e:
+        st.error(f"Error managing collection {collection_name}: {str(e)}")
+        
+        # Attempt alternative approach
+        try:
+            # Try to get existing collection
+            collection = client.get_collection(name=collection_name)
+            st.info(f"Using existing collection: {collection_name}")
+            return collection
+        except Exception as inner_e:
+            st.error(f"Failed to get or create collection: {inner_e}")
+            raise
 
+# Modify the main initialization
+try:
+    # Use the new robust collection management
+    chroma_client = get_chroma_client()
+    collection = get_or_create_collection(chroma_client, "github_collection")
+except Exception as e:
+    st.error(f"Critical error initializing ChromaDB: {str(e)}")
+    # Fallback mechanism
+    collection = None
 chroma_client = get_chroma_client()
 
 # Create or get collection
