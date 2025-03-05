@@ -9,71 +9,27 @@ __import__('pysqlite3')
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 import chromadb
+from chromadb.config import Settings
 import torch
 import openai
 from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
 
-# OpenAI API Key Configuration
-try:
-    openai.api_key = st.secrets["openai"]["api_key"]
-except KeyError:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# Add an input for the API key in the UI if not already set
-if not openai.api_key:
-    st.sidebar.warning("OpenAI API Key is required!")
-    api_key_input = st.sidebar.text_input(
-        "Enter your OpenAI API Key", 
-        type="password"
-    )
-    
-    if api_key_input:
-        openai.api_key = api_key_input
-        st.sidebar.success("API Key set successfully!")
-
-# GitHub Authentication
-hf_token = st.text_input("Enter your Hugging Face API token:", type="password")
-
-# Store the token in the session state
-if hf_token:
-    st.session_state.hf_token = hf_token
-    st.success("Hugging Face token stored successfully!")
-
-# Use the token in your app
-if 'hf_token' in st.session_state:
-    st.write("Token is available for use in the app")
-else:
-    st.warning("Please enter your Hugging Face token")
-
-# Initialize embedding model
-@st.cache_resource
-def load_embedding_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
-
-embedding_model = load_embedding_model()
-
-# Initialize ChromaDB
+# ChromaDB Client Initialization
 @st.cache_resource
 def get_chroma_client():
-    # Use persistent storage to prevent collection conflicts
     return chromadb.PersistentClient(
-        path=".chromadb",  # Specify a persistent storage path
+        path=".chromadb",
         settings=Settings(
-            anonymized_telemetry=False,  # Disable telemetry if needed
-            allow_reset=True  # Allow resetting the database
+            anonymized_telemetry=False,
+            allow_reset=True
         )
     )
+
+# Robust collection management function
 def get_or_create_collection(client, collection_name):
     """
     Safely get or create a ChromaDB collection
-    
-    Args:
-        client: ChromaDB client
-        collection_name: Name of the collection
-    
-    Returns:
-        ChromaDB collection
     """
     try:
         # Try to delete existing collection first
@@ -103,39 +59,51 @@ def get_or_create_collection(client, collection_name):
             st.error(f"Failed to get or create collection: {inner_e}")
             raise
 
-# Modify the main initialization
+# OpenAI API Key Configuration
 try:
-    # Use the new robust collection management
+    openai.api_key = st.secrets["openai"]["api_key"]
+except KeyError:
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Add an input for the API key in the UI if not already set
+if not openai.api_key:
+    st.sidebar.warning("OpenAI API Key is required!")
+    api_key_input = st.sidebar.text_input(
+        "Enter your OpenAI API Key", 
+        type="password"
+    )
+    
+    if api_key_input:
+        openai.api_key = api_key_input
+        st.sidebar.success("API Key set successfully!")
+
+# Hugging Face Token Input
+hf_token = st.text_input("Enter your Hugging Face API token:", type="password")
+
+# Store the token in the session state
+if hf_token:
+    st.session_state.hf_token = hf_token
+    st.success("Hugging Face token stored successfully!")
+
+# Initialize embedding model
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+embedding_model = load_embedding_model()
+
+# Initialize ChromaDB
+try:
     chroma_client = get_chroma_client()
     collection = get_or_create_collection(chroma_client, "github_collection")
 except Exception as e:
     st.error(f"Critical error initializing ChromaDB: {str(e)}")
-    # Fallback mechanism
     collection = None
-chroma_client = get_chroma_client()
-
-# Create or get collection
-try:
-    collection = chroma_client.get_collection("github_collection")
-    st.success("Connected to existing ChromaDB collection.")
-except:
-    collection = chroma_client.create_collection(
-        "github_collection",
-        metadata={"description": "GitHub repository code chunks for RAG"}
-    )
-    st.info("Created new ChromaDB collection.")
 
 # Robust dataset loading function
 def extract_text_from_github(num_samples=100, programming_languages=None):
     """
     Extract text from GitHub dataset with comprehensive error handling
-    
-    Args:
-        num_samples (int): Number of samples to extract
-        programming_languages (list): Optional list of programming languages to filter
-    
-    Returns:
-        list: List of extracted text samples
     """
     try:
         # First, check network connectivity and dataset availability
@@ -227,7 +195,8 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
         """)
         
         return []
-# Manual text chunking function (remains the same as previous implementation)
+
+# Manual text chunking function
 def chunk_text(text, chunk_size=1000, overlap=200):
     """Chunk text into smaller pieces with overlap"""
     chunks = []
@@ -250,12 +219,12 @@ def chunk_text(text, chunk_size=1000, overlap=200):
     
     return chunks
 
-# Function to generate embeddings (remains the same)
+# Function to generate embeddings
 def generate_embeddings(texts):
     """Generate embeddings for a list of texts"""
     return embedding_model.encode(texts).tolist()
 
-# Store documents in ChromaDB (remains largely the same)
+# Store documents in ChromaDB
 def store_in_chromadb(documents):
     """Store chunked documents in ChromaDB"""
     for doc in documents:
@@ -284,7 +253,7 @@ def store_in_chromadb(documents):
                 documents=[chunk]
             )
 
-# Semantic search function (remains the same)
+# Semantic search function
 def semantic_search(query, n_results=3):
     """Perform semantic search on the database"""
     query_embedding = generate_embeddings([query])[0]
@@ -296,7 +265,7 @@ def semantic_search(query, n_results=3):
     
     return results
 
-# RAG generation function (remains largely the same)
+# RAG generation function
 def rag_generate(query, n_chunks=3, temperature=0.7):
     """
     Perform RAG by retrieving relevant chunks and generating response
@@ -350,6 +319,15 @@ ANSWER:
             "retrieved_chunks": retrieved_chunks
         }
 
+# Optional: Debug function to print available configurations
+def print_github_dataset_configs():
+    from datasets import get_dataset_config_names
+    
+    configs = get_dataset_config_names("codeparrot/github-code")
+    st.write("Available GitHub Code Dataset Configurations:")
+    for config in configs:
+        st.write(config)
+
 # Streamlit UI
 def main():
     st.title("RAG Application with GitHub Code Dataset")
@@ -364,7 +342,8 @@ def main():
         # Language selection multiselect
         languages = st.multiselect(
             "Select Programming Languages", 
-            ['Python', 'JavaScript', 'Java', 'C++', 'TypeScript', 'Ruby', 'Go', 'Rust']
+            ['Python', 'JavaScript', 'Java', 'C++', 
+             'TypeScript', 'Ruby', 'Go', 'Rust']
         )
         
         num_samples = st.slider("Number of samples to load", 10, 500, 50)
@@ -393,7 +372,6 @@ def main():
         except:
             st.warning("ChromaDB collection not yet initialized")
 
-    # Search and Settings tabs remain the same as in the previous implementation
     with tab2:
         st.header("Search and Generate")
         
@@ -437,13 +415,14 @@ def main():
         if st.button("Clear ChromaDB Collection", type="primary"):
             try:
                 chroma_client.delete_collection("github_collection")
-                collection = chroma_client.create_collection(
-                    "github_collection",
-                    metadata={"description": "GitHub repository code chunks for RAG"}
-                )
+                collection = get_or_create_collection(chroma_client, "github_collection")
                 st.success("ChromaDB collection cleared and recreated")
             except Exception as e:
                 st.error(f"Error clearing collection: {str(e)}")
+
+        st.subheader("Dataset Configurations")
+        if st.button("Show Available Configurations"):
+            print_github_dataset_configs()
 
 # Show app instructions in sidebar
 st.sidebar.title("Instructions")
