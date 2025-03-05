@@ -96,7 +96,7 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
 
         # Prepare dataset loading parameters
         load_params = {
-            "name": "codeparrot/github-code", 
+            "path": "codeparrot/github-code",  # Explicitly add path parameter
             "split": f"train[:{num_samples}]",
             "streaming": False,
             "trust_remote_code": True
@@ -104,9 +104,10 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
 
         # Optional language filtering
         if programming_languages:
+            # Add languages to configuration if specified
             load_params["config"] = f"language:{','.join(programming_languages)}"
 
-        # Try loading dataset with more explicit parameters
+        # Try loading dataset with parameters
         dataset = load_dataset(**load_params)
         
         samples = []
@@ -146,7 +147,6 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
         """)
         
         return []
-
 # Manual text chunking function (remains the same as previous implementation)
 def chunk_text(text, chunk_size=1000, overlap=200):
     """Chunk text into smaller pieces with overlap"""
