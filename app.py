@@ -95,20 +95,46 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
             return []
 
         # Prepare dataset loading parameters
-        load_params = {
-            "path": "codeparrot/github-code",
-            "split": f"train[:{num_samples}]",
-            "streaming": False,
-            "trust_remote_code": True
+        # Modify language configurations to match the exact config names
+        language_configs = {
+            'Python': 'Python-all',
+            'JavaScript': 'JavaScript-all',
+            'Java': 'Java-all',
+            'C++': 'C++-all',
+            'TypeScript': 'TypeScript-all',
+            'Ruby': 'Ruby-all',
+            'Go': 'Go-all',
+            'Rust': 'Rust-all'
         }
 
-        # Optional language filtering
-        if programming_languages:
-            # Try different approach for language filtering
-            load_params["name"] = ",".join(programming_languages)
+        # If no languages specified, use a default or all available
+        if not programming_languages:
+            dataset = load_dataset(
+                "codeparrot/github-code", 
+                split=f"train[:{num_samples}]",
+                streaming=False,
+                trust_remote_code=True
+            )
+        else:
+            # Map user-friendly language names to correct config names
+            valid_configs = [
+                language_configs.get(lang, lang + '-all') 
+                for lang in programming_languages 
+                if lang in language_configs or lang + '-all' in language_configs
+            ]
 
-        # Try loading dataset with parameters
-        dataset = load_dataset(**load_params)
+            if not valid_configs:
+                st.error("No valid language configurations found.")
+                return []
+
+            # Load dataset with specified language configuration
+            dataset = load_dataset(
+                "codeparrot/github-code", 
+                name=valid_configs[0] if len(valid_configs) == 1 else None,
+                split=f"train[:{num_samples}]",
+                streaming=False,
+                trust_remote_code=True
+            )
         
         samples = []
         for i, item in enumerate(dataset):
