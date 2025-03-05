@@ -32,6 +32,20 @@ if not openai.api_key:
         openai.api_key = api_key_input
         st.sidebar.success("API Key set successfully!")
 
+hf_token = st.text_input("Enter your Hugging Face API token:", type="password")
+
+# Store the token in the session state
+if hf_token:
+    st.session_state.hf_token = hf_token
+    st.success("Hugging Face token stored successfully!")
+
+# Use the token in your app
+if 'hf_token' in st.session_state:
+    # Your code to use the token goes here
+    st.write("Token is available for use in the app")
+else:
+    st.warning("Please enter your Hugging Face token")
+
 # Initialize embedding model
 @st.cache_resource
 def load_embedding_model():
