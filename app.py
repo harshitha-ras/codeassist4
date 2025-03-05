@@ -18,7 +18,7 @@ import torch
 from openai import OpenAI  # Updated import
 from sentence_transformers import SentenceTransformer
 
-# ChromaDB Client Initialization
+# ChromaDB Client Initialization (unchanged)
 @st.cache_resource
 def get_chroma_client():
     return chromadb.PersistentClient(
@@ -29,7 +29,7 @@ def get_chroma_client():
         )
     )
 
-# Robust collection management function
+# Robust collection management function (unchanged, keep the previous implementation)
 def get_or_create_collection(client, collection_name):
     """
     Safely get or create a ChromaDB collection
@@ -62,85 +62,59 @@ def get_or_create_collection(client, collection_name):
             st.error(f"Failed to get or create collection: {inner_e}")
             raise
 
-# [... rest of the previous parsing and utility functions remain the same ...]
-
-# OpenAI Client Initialization with careful error handling
-def initialize_openai_client():
+# Clean OpenAI Client Initialization
+def get_openai_api_key():
     """
-    Carefully initialize OpenAI client with multiple fallback methods
+    Retrieve OpenAI API key from various sources
     """
+    # Try Streamlit secrets first
     try:
-        # First, try Streamlit secrets
         if hasattr(st.secrets, 'openai') and 'api_key' in st.secrets.openai:
-            return OpenAI(api_key=st.secrets.openai.api_key)
-        
-        # Then try environment variable
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            return OpenAI(api_key=api_key)
-        
-        # If no key found, return None
-        return None
-    
-    except Exception as e:
-        st.error(f"Error initializing OpenAI client: {e}")
-        return None
+            return st.secrets.openai.api_key
+    except Exception:
+        pass
 
-# Initialize the OpenAI client
-openai_client = initialize_openai_client()
+    # Try environment variable
+    env_key = os.getenv("OPENAI_API_KEY")
+    if env_key:
+        return env_key
 
-# API Key validation and input UI
-def validate_and_set_api_key():
-    global openai_client
-    
-    # Check if client is not initialized
-    if not openai_client:
-        st.sidebar.warning("OpenAI API Key is required!")
-        api_key_input = st.sidebar.text_input(
-            "Enter your OpenAI API Key", 
-            type="password"
-        )
-        
-        if api_key_input:
-            try:
-                # Attempt to create client with input key
-                openai_client = OpenAI(api_key=api_key_input)
-                st.sidebar.success("API Key set successfully!")
-                return True
-            except Exception as e:
-                st.sidebar.error(f"Invalid API Key: {e}")
-                return False
-    
-    return True
+    return None
 
-# [... rest of the previous code remains the same, just replace the OpenAI client initialization part ...]
+def create_openai_client(api_key=None):
+    """
+    Create OpenAI client with minimal arguments
+    """
+    if not api_key:
+        api_key = get_openai_api_key()
+    
+    if not api_key:
+        raise ValueError("No OpenAI API key found")
+    
+    # Create client with only the essential argument
+    return OpenAI(api_key=api_key)
 
-# Streamlit UI
-def main():
-    st.title("Document RAG Application")
-    
-    # Validate API key first
-    if not validate_and_set_api_key():
-        return
-    
-    # Rest of the main() function remains the same...
-    # Sidebar instructions
-    st.sidebar.title("Instructions")
-    st.sidebar.markdown("""
-    1. Upload a document (TXT, PDF, DOCX, PY)
-    2. Enter a query about the document
-    3. Get AI-generated answers based on document content
-    
-    Tips:
-    - Ensure a clear, specific query
-    - Works best with well-structured documents
-    - OpenAI API key required
-    """)
-    
-    # Main tabs
-    tab1, tab2 = st.tabs(["Upload Document", "Search and Generate"])
+# Global client initialization
+try:
+    openai_client = create_openai_client()
+except Exception as e:
+    openai_client = None
+    st.sidebar.error(f"OpenAI Client Initialization Error: {e}")
 
-    # [... rest of the main function remains the same ...]
+# Rest of the document parsing and utility functions remain the same as in previous versions
+# [Include all the previous parsing functions like parse_text_file(), parse_pdf_file(), etc.]
+
+# Semantic search and other utility functions
+def semantic_search(query, n_results=3):
+    """Perform semantic search on the database"""
+    query_embedding = generate_embeddings([query])[0]
+    
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results
+    )
+    
+    return results
 
 # RAG generation function
 def rag_generate(query, n_chunks=3, temperature=0.7):
@@ -150,7 +124,7 @@ def rag_generate(query, n_chunks=3, temperature=0.7):
     """
     # Ensure we have a valid client
     if not openai_client:
-        st.error("OpenAI client not initialized. Please check your API key.")
+        st.error("OpenAI client not initialized. Please provide an API key.")
         return {
             "response": "Sorry, OpenAI client initialization failed.",
             "retrieved_chunks": []
@@ -203,6 +177,39 @@ ANSWER:
             "response": "Sorry, I couldn't generate a response.",
             "retrieved_chunks": retrieved_chunks
         }
+
+# Streamlit UI
+def main():
+    st.title("Document RAG Application")
+    
+    # API Key Input if not already set
+    global openai_client
+    if not openai_client:
+        api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password")
+        
+        if api_key:
+            try:
+                openai_client = create_openai_client(api_key)
+                st.sidebar.success("API Key set successfully!")
+            except Exception as e:
+                st.sidebar.error(f"Invalid API Key: {e}")
+                return
+    
+    # Sidebar instructions
+    st.sidebar.title("Instructions")
+    st.sidebar.markdown("""
+    1. Upload a document (TXT, PDF, DOCX, PY)
+    2. Enter a query about the document
+    3. Get AI-generated answers based on document content
+    
+    Tips:
+    - Ensure a clear, specific query
+    - Works best with well-structured documents
+    - OpenAI API key required
+    """)
+    
+    # Rest of the main function remains the same as in previous versions
+    # [Include tabs, file upload, search and generate logic from previous versions]
 
 # Run the app
 if __name__ == "__main__":
