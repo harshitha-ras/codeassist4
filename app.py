@@ -77,14 +77,6 @@ if not openai.api_key:
         openai.api_key = api_key_input
         st.sidebar.success("API Key set successfully!")
 
-# Hugging Face Token Input
-hf_token = st.text_input("Enter your Hugging Face API token:", type="password")
-
-# Store the token in the session state
-if hf_token:
-    st.session_state.hf_token = hf_token
-    st.success("Hugging Face token stored successfully!")
-
 # Initialize embedding model
 @st.cache_resource
 def load_embedding_model():
@@ -100,100 +92,108 @@ except Exception as e:
     st.error(f"Critical error initializing ChromaDB: {str(e)}")
     collection = None
 
-# Robust dataset loading function
+# Dataset loading function for GitHub Code
 def extract_text_from_github(num_samples=100, programming_languages=None):
     """
-    Extract text from GitHub dataset with comprehensive error handling
+    Enhanced GitHub dataset loading with comprehensive error handling and logging
     """
     try:
-        # First, check network connectivity and dataset availability
+        # Detailed network and library version checks
+        import sys
+        import pkg_resources
+
+        st.write("Python Version:", sys.version)
+        st.write("Installed Library Versions:")
+        for package in ['huggingface_hub', 'datasets', 'transformers']:
+            try:
+                version = pkg_resources.get_distribution(package).version
+                st.write(f"{package}: {version}")
+            except pkg_resources.DistributionNotFound:
+                st.error(f"{package} is not installed")
+
+        # Network connectivity test
         try:
-            response = requests.head("https://huggingface.co/datasets/codeparrot/github-code")
-            if response.status_code != 200:
-                st.error(f"Hugging Face dataset endpoint returned status code {response.status_code}")
-                return []
+            response = requests.get("https://huggingface.co", timeout=10)
+            st.success(f"Network connectivity to Hugging Face: {response.status_code}")
         except requests.RequestException as network_error:
             st.error(f"Network connectivity issue: {network_error}")
             return []
 
-        # Prepare dataset loading parameters
-        # Modify language configurations to match the exact config names
-        language_configs = {
-            'Python': 'Python-all',
-            'JavaScript': 'JavaScript-all',
-            'Java': 'Java-all',
-            'C++': 'C++-all',
-            'TypeScript': 'TypeScript-all',
-            'Ruby': 'Ruby-all',
-            'Go': 'Go-all',
-            'Rust': 'Rust-all'
-        }
+        # Comprehensive dataset loading with verbose logging
+        try:
+            # Use an authentication token if available
+            from huggingface_hub import login
+            if hasattr(st.session_state, 'hf_token'):
+                login(token=st.session_state.hf_token)
+                st.info("Logged in with Hugging Face token")
 
-        # If no languages specified, use a default or all available
-        if not programming_languages:
-            dataset = load_dataset(
-                "codeparrot/github-code", 
-                split=f"train[:{num_samples}]",
-                streaming=False,
-                trust_remote_code=True
-            )
-        else:
-            # Map user-friendly language names to correct config names
-            valid_configs = [
-                language_configs.get(lang, lang + '-all') 
-                for lang in programming_languages 
-                if lang in language_configs or lang + '-all' in language_configs
-            ]
+            # Language configuration logic remains the same as in original code
+            language_configs = {
+                'Python': 'Python-all',
+                'JavaScript': 'JavaScript-all',
+                'Java': 'Java-all',
+                'C++': 'C++-all',
+                'TypeScript': 'TypeScript-all',
+                'Ruby': 'Ruby-all',
+                'Go': 'Go-all',
+                'Rust': 'Rust-all'
+            }
 
-            if not valid_configs:
-                st.error("No valid language configurations found.")
-                return []
+            # Configuration selection logic
+            if not programming_languages:
+                st.info("Loading default dataset configuration")
+                dataset = load_dataset(
+                    "codeparrot/github-code", 
+                    split=f"train[:{num_samples}]",
+                    streaming=False,
+                    trust_remote_code=True
+                )
+            else:
+                valid_configs = [
+                    language_configs.get(lang, lang + '-all') 
+                    for lang in programming_languages 
+                    if lang in language_configs or lang + '-all' in language_configs
+                ]
 
-            # Load dataset with specified language configuration
-            dataset = load_dataset(
-                "codeparrot/github-code", 
-                name=valid_configs[0] if len(valid_configs) == 1 else None,
-                split=f"train[:{num_samples}]",
-                streaming=False,
-                trust_remote_code=True
-            )
-        
-        samples = []
-        for i, item in enumerate(dataset):
-            # More robust content extraction
-            content = item.get('code', '')
-            if content and isinstance(content, str) and len(content.strip()) > 0:
-                samples.append({
-                    "id": str(i),
-                    "text": content.strip()[:5000],  # Limit text length
-                    "metadata": {
-                        "language": item.get('language', 'unknown'),
-                        "repo_name": item.get('repo_name', 'unknown'),
-                        "path": item.get('path', 'unknown')
-                    }
-                })
-        
-        return samples
-    
+                if not valid_configs:
+                    st.error("No valid language configurations found.")
+                    return []
+
+                st.info(f"Using configurations: {valid_configs}")
+                dataset = load_dataset(
+                    "codeparrot/github-code", 
+                    name=valid_configs[0] if len(valid_configs) == 1 else None,
+                    split=f"train[:{num_samples}]",
+                    streaming=False,
+                    trust_remote_code=True
+                )
+            
+            # Rest of the processing remains the same
+            samples = []
+            for i, item in enumerate(dataset):
+                content = item.get('code', '')
+                if content and isinstance(content, str) and len(content.strip()) > 0:
+                    samples.append({
+                        "id": str(i),
+                        "text": content.strip()[:5000],
+                        "metadata": {
+                            "language": item.get('language', 'unknown'),
+                            "repo_name": item.get('repo_name', 'unknown'),
+                            "path": item.get('path', 'unknown')
+                        }
+                    })
+            
+            st.success(f"Successfully loaded {len(samples)} samples")
+            return samples
+
+        except Exception as dataset_error:
+            st.error(f"Dataset loading error: {str(dataset_error)}")
+            st.error(traceback.format_exc())
+            return []
+
     except Exception as e:
-        # Comprehensive error logging
-        st.error(f"Detailed Error Loading Dataset: {str(e)}")
+        st.error(f"Unexpected error: {str(e)}")
         st.error(traceback.format_exc())
-        
-        # Provide more context and potential solutions
-        st.info("""
-        Comprehensive Troubleshooting for Dataset Loading:
-        1. Verify network connectivity
-        2. Check Hugging Face dataset availability
-        3. Ensure you have the latest versions of:
-           - huggingface_hub
-           - datasets
-           - transformers
-        4. Potential workarounds:
-           - Try alternative dataset loading method
-           - Verify Hugging Face token
-        """)
-        
         return []
 
 # Manual text chunking function
