@@ -96,7 +96,7 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
 
         # Prepare dataset loading parameters
         load_params = {
-            "path": "codeparrot/github-code",  # Explicitly add path parameter
+            "path": "codeparrot/github-code",
             "split": f"train[:{num_samples}]",
             "streaming": False,
             "trust_remote_code": True
@@ -104,8 +104,8 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
 
         # Optional language filtering
         if programming_languages:
-            # Add languages to configuration if specified
-            load_params["config"] = f"language:{','.join(programming_languages)}"
+            # Try different approach for language filtering
+            load_params["name"] = ",".join(programming_languages)
 
         # Try loading dataset with parameters
         dataset = load_dataset(**load_params)
@@ -142,8 +142,8 @@ def extract_text_from_github(num_samples=100, programming_languages=None):
            - datasets
            - transformers
         4. Potential workarounds:
-           - Try a different dataset subset
-           - Use alternative data loading method
+           - Try alternative dataset loading method
+           - Verify Hugging Face token
         """)
         
         return []
