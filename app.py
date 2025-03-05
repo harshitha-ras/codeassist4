@@ -15,7 +15,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb.config import Settings
 import torch
-import openai
+from openai import OpenAI  # Updated import
 from sentence_transformers import SentenceTransformer
 
 # ChromaDB Client Initialization
@@ -201,14 +201,16 @@ def store_in_chromadb(documents):
                 documents=[chunk]
             )
 
-# OpenAI API setup
+# OpenAI Client Initialization
 try:
-    openai.api_key = st.secrets["openai"]["api_key"]
+    # Try to get API key from Streamlit secrets
+    openai_client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 except KeyError:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    # Fallback to environment variable
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Validate OpenAI API key
-if not openai.api_key:
+if not openai_client.api_key:
     st.sidebar.warning("OpenAI API Key is required!")
     api_key_input = st.sidebar.text_input(
         "Enter your OpenAI API Key", 
@@ -216,7 +218,7 @@ if not openai.api_key:
     )
     
     if api_key_input:
-        openai.api_key = api_key_input
+        openai_client = OpenAI(api_key=api_key_input)
         st.sidebar.success("API Key set successfully!")
 
 # Semantic search function
@@ -260,8 +262,8 @@ ANSWER:
 """
     
     try:
-        # Use OpenAI API directly
-        response = openai.ChatCompletion.create(
+        # Use OpenAI API with new method
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that answers questions based on given context."},
