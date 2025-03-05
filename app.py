@@ -4,8 +4,8 @@ import sys
 import traceback
 import requests
 import io
-import pypdf  # For PDF parsing
-import docx  # For Word document parsing
+import PyPDF2  # PDF parsing
+import docx  # Word document parsing
 
 # SQLite Patch
 __import__('pysqlite3')
@@ -69,7 +69,7 @@ def parse_text_file(uploaded_file):
 def parse_pdf_file(uploaded_file):
     """Parse PDF files"""
     try:
-        pdf_reader = pypdf.PdfReader(uploaded_file)
+        pdf_reader = PyPDF2.PdfReader(uploaded_file)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n\n"
@@ -171,6 +171,18 @@ try:
 except KeyError:
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Validate OpenAI API key
+if not openai.api_key:
+    st.sidebar.warning("OpenAI API Key is required!")
+    api_key_input = st.sidebar.text_input(
+        "Enter your OpenAI API Key", 
+        type="password"
+    )
+    
+    if api_key_input:
+        openai.api_key = api_key_input
+        st.sidebar.success("API Key set successfully!")
+
 # Semantic search function
 def semantic_search(query, n_results=3):
     """Perform semantic search on the database"""
@@ -240,6 +252,19 @@ ANSWER:
 # Streamlit UI
 def main():
     st.title("Document RAG Application")
+    
+    # Sidebar instructions
+    st.sidebar.title("Instructions")
+    st.sidebar.markdown("""
+    1. Upload a document (TXT, PDF, DOCX)
+    2. Enter a query about the document
+    3. Get AI-generated answers based on document content
+    
+    Tips:
+    - Ensure a clear, specific query
+    - Works best with well-structured documents
+    - OpenAI API key required
+    """)
     
     # Main tabs
     tab1, tab2 = st.tabs(["Upload Document", "Search and Generate"])
